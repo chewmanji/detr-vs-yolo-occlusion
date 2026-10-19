@@ -29,6 +29,10 @@ Experiment matrix: 3 models × 2 training regimes (R1 = isolated objects only, R
 - Licensing: D2S is non-commercial and Ultralytics is AGPL-3.0, so the project stays purely academic.
 - GPU budget checkpoint (M1, 2026-11-03): if RF-DETR epoch time makes 18 runs infeasible, drop the second seed.
 
+## Commits
+
+Follow [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/): `<type>[optional scope]: <description>`, imperative, lowercase description, no trailing period. Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `build`, `ci`, `perf`, `style`. Breaking change: `!` after type/scope or a `BREAKING CHANGE:` footer. Example: `feat(data): add D2S to YOLO converter`.
+
 ## Repo notes
 
 - `docs/Przegląd/` (literature PDFs) is gitignored and local only.
