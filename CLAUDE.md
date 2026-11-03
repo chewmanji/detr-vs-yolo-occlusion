@@ -4,7 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Status
 
-No code yet: the repo holds only planning docs. There are no build, lint or test commands. Add them here once code exists.
+Environment set up, no code yet. Python 3.11 with dependencies managed by uv (`pyproject.toml` + `uv.lock`):
+
+- `uv sync` installs the locked environment into `.venv`
+- `uv run python <script>` runs inside it
+- `uv add <pkg>` adds a dependency
+
+Locally torch is the CPU build, used for data prep, evaluation and CPU latency. Training runs on Kaggle, which keeps its own CUDA torch and installs only the locked `ultralytics` and `rfdetr` versions. There are no tests or lint yet; add their commands here once they exist.
 
 ## Project
 
@@ -21,9 +27,10 @@ Experiment matrix: 3 models × 2 training regimes (R1 = isolated objects only, R
 
 - PyTorch, `ultralytics` and `rfdetr` packages, Kaggle free GPU, input resolution ~640 px.
 - Both packages accept YOLO-format annotations, so the plan relies on **one** D2S → YOLO conversion shared by all models.
-- Dataset: MVTec D2S. The D2S train split has isolated objects on a uniform background, and val has crowded scenes. Test annotations are not public, so **D2S val serves as the test set** and validation is split off from train. Fallback dataset: RPC.
-- Test A: real occlusion on D2S val, with the occlusion level estimated from box/mask overlap.
-- Test B: synthetic scenes built from D2S mask cutouts, where the exact occlusion % is known. Results are binned at 0–20/20–40/40–60/60–80%. Cutouts must come from images **not used in training**.
+- Dataset: MVTec D2S. The D2S train split has isolated objects on a uniform background, and val has crowded scenes. Test annotations are not public, so **D2S val serves as the test set**. Validation is 2 of the 10 rotations of each training scene, used only to monitor training; models are tested on their final weights. Fallback dataset: RPC.
+- Data lives in `data/d2s` and `data/d2s_amodal` (gitignored except `.md` files). Image id = scene × 100 + k, rotation = k % 10, lighting = k // 10; never split one scene between training and testing.
+- Test A: real occlusion on D2S val, with exact per-object occlusion from D2S Amodal: 1 − visible/amodal area inside the frame. Amodal images are zero-padded, so masks are shifted back to D2S coordinates; objects cut by the image edge are tracked separately. Test A has few objects above 40% occlusion.
+- Test B: synthetic scenes built from D2S mask cutouts, where the exact occlusion % is known. Results are binned at 0–20/20–40/40–60/60–80%. Cutouts come from unoccluded objects in D2S val, which no model trains on.
 - Primary metric: recall at IoU 0.5 per occlusion bin (a missed product = an unscanned product). Also COCO mAP@50:95 and mAP@50, the class-confusion share, and CPU latency (ms/img).
 - Scope is limited to closed-set detection on the 60 D2S classes. No embeddings, open-set matching or video: those belong to the future master's thesis.
 - Licensing: D2S is non-commercial and Ultralytics is AGPL-3.0, so the project stays purely academic.

@@ -31,12 +31,12 @@ Projekt realizuję samodzielnie; zakres i harmonogram są dopasowane do jednej o
 
 YOLO26 ma dwie głowice: one-to-one (bez NMS) i opcjonalną one-to-many (z NMS). Pozwala to zmierzyć efekt NMS dodatkowo na jednym modelu, bez różnic w rdzeniu modelu.
 
-**Dane:** MVTec D2S (60 klas produktów, sceny przypominające automatyczną kasę). Zbiór treningowy zawiera pojedyncze obiekty na jednolitym tle, walidacyjny – zatłoczone sceny. Adnotacje testowe D2S nie są publiczne, więc walidacja D2S pełni rolę zbioru testowego, a walidację wydzielam z treningu. Zapasowo: RPC (poziomy trudności według zagęszczenia produktów).
+**Dane:** MVTec D2S (60 klas produktów, sceny przypominające automatyczną kasę). Zbiór treningowy zawiera pojedyncze obiekty na jednolitym tle, walidacyjny – zatłoczone sceny. Adnotacje testowe D2S nie są publiczne, więc walidacja D2S pełni rolę zbioru testowego, a walidację wydzielam z treningu (2 z 10 obrotów każdej sceny, tylko do monitorowania treningu). Zapasowo: RPC (poziomy trudności według zagęszczenia produktów).
 
 **Zaszumienie danych w dwóch miejscach:**
 
-- **Test A – okluzja realna:** sceny z walidacji D2S; stopień okluzji przybliżony na podstawie nakładania się obiektów.
-- **Test B – okluzja kontrolowana:** sceny syntetyczne złożone z wycinków produktów (maski D2S). Pełna maska każdego obiektu jest znana, więc procent zasłonięcia liczony jest dokładnie i grupowany w przedziały 0–20%, 20–40%, 40–60%, 60–80%. Wycinki pochodzą z obrazów nieużytych w treningu.
+- **Test A – okluzja realna:** sceny z walidacji D2S; stopień okluzji każdego obiektu liczony dokładnie z adnotacji amodalnych D2S Amodal jako udział niewidocznej części pełnej maski.
+- **Test B – okluzja kontrolowana:** sceny syntetyczne złożone z wycinków produktów (maski D2S). Pełna maska każdego obiektu jest znana, więc procent zasłonięcia liczony jest dokładnie i grupowany w przedziały 0–20%, 20–40%, 40–60%, 60–80%. Wycinki pochodzą z obrazów nieużytych w treningu: są to niezasłonięte obiekty z walidacji D2S. Test B jest głównym źródłem wniosków dla okluzji powyżej 40%, bo w teście A takich obiektów jest niewiele.
 - **Reżim treningu R1:** tylko oryginalne izolowane obiekty.
 - **Reżim treningu R2:** R1 + syntetyczne zatłoczone sceny copy-paste.
 
@@ -112,3 +112,4 @@ Kamień M1 to także punkt decyzyjny: jeśli pomiar czasu epoki RF-DETR pokaże,
   2.  Simple Copy-Paste is a Strong Data Augmentation Method for Instance Segmentation: https://arxiv.org/abs/2012.07177
 - Zbiór danych
   1.  MVTec D2S: Densely Segmented Supermarket Dataset: https://arxiv.org/abs/1804.08292
+  2.  Learning to See the Invisible: End-to-End Trainable Amodal Instance Segmentation (D2S Amodal): https://arxiv.org/abs/1804.08864
