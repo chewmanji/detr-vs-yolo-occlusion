@@ -10,6 +10,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "pyright>=1.1.414",
     "ruff>=0.17.3",
 ]
 
@@ -19,3 +20,8 @@ line-length = 120
 [tool.ruff.lint]
 # pycodestyle, pyflakes, isort, bugbear, pyupgrade, and type hints required on every function
 select = ["E", "W", "F", "I", "B", "UP", "ANN"]
+
+[tool.pyright]
+# Pylance reads this too, so the editor and `uv run pyright` report the same errors
+include = ["scripts"]
+typeCheckingMode = "standard"
