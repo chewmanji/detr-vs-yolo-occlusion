@@ -1,0 +1,216 @@
+# Plan realizacji projektu
+
+Szczegółowy plan prac na podstawie [Temat.md](Temat.md), który pozostaje źródłem prawdy co do zakresu, pytań badawczych i kamieni milowych. Ten plik rozpisuje je na zadania, decyzje metodyczne i kryteria ukończenia etapów. Pola wyboru służą do śledzenia postępu.
+
+**Stan na 03.11.2026:** gotowe są opis tematu i lista literatury; nie ma jeszcze kodu ani pobranych danych. M1 („pierwszy trening") wypada dziś, więc realnie przesuwa się na 10.11. Opóźnienie odrabiam, uruchamiając treningi R1 już w fazie generatora (Etap 4a), bo nie potrzebują one danych syntetycznych. Kamienie M2–M5 zostają bez zmian.
+
+Pozycje oznaczone **(D)** doprecyzowują lub zmieniają Temat.md i czekają na potwierdzenie (sekcja 13).
+
+## 1. Kluczowe decyzje metodyczne
+
+1. **Dokładna okluzja w teście A (D).** MVTec udostępnia D2S Amodal (Follmann i in., WACV 2019): maski amodalne i widoczne dla obrazów D2S, w tym wszystkich 3600 obrazów walidacji (15 654 obiekty, z czego 7473 zasłonięte; średnio 18% zasłonięcia wśród zasłoniętych). Okluzję liczę wtedy dokładnie jako `1 − |maska widoczna| / |maska amodalna w kadrze|`, a nie z nakładania się ramek. Przybliżenie z Temat.md zostaje jako plan awaryjny.
+2. **Scena jako jednostka danych.** Każda scena D2S to 30 zdjęć (10 obrotów co 36° × 3 oświetlenia), czyli prawie duplikaty. Zdjęcia jednej sceny nigdy nie trafiają do różnych zbiorów, a przedziały ufności w teście A liczę bootstrapem po 120 scenach, nie po 3600 obrazach.
+3. **Walidacja z obrotów, tylko do monitorowania (D).** Trening D2S ma tylko 146 scen (ok. 2,4 na klasę), więc wydzielenie całych scen zabrałoby części klas połowę danych. Do walidacji idą 2 z 10 obrotów każdej sceny treningowej (np. 4 i 9, wszystkie oświetlenia). Taka walidacja jest optymistyczna, więc służy tylko do śledzenia zbieżności i łapania błędów. Do testów biorę wagi końcowe (last/EMA) po ustalonej liczbie epok, bez wybierania najlepszego checkpointu; reguła jest ta sama dla wszystkich modeli.
+4. **Wycinki do testu B z walidacji D2S (D).** Źródłem są obiekty walidacji D2S bez okluzji i nieucięte krawędzią kadru (według D2S Amodal). Spełnia to warunek „obrazy nieużyte w treningu" i nie zabiera i tak skromnych scen treningowych. Wycinki do R2 pochodzą tylko z części treningowej (bez obrotów walidacyjnych).
+5. **Jedna konwersja, dwa zestawy etykiet.** Konwersja D2S → YOLO daje jeden zestaw obrazów i dwa zestawy etykiet: `c60` (60 klas) i `c1` (klasa „produkt"). Układ `train/`, `valid/`, `test/` z podkatalogami `images/` i `labels/` plus `data.yaml` czytają oba pakiety (RF-DETR wymaga dokładnie takiego). Tryb class-agnostic to osobne etykiety, a nie `single_cls` z Ultralytics, bo RF-DETR nie ma odpowiednika, a modele mają dostać identyczne dane.
+6. **Jeden ewaluator.** Każdy model zapisuje surowe predykcje w formacie wyników COCO (JSON), a wszystkie metryki liczy jeden skrypt (pycocotools i własny recall per przedział). Nie używam wbudowanych `val()`, bo pakiety liczą mAP inaczej. GPU służy tylko do treningu i predykcji, analiza działa lokalnie.
+7. **YOLO26 z jawnym `nms=False`.** Według dokumentacji Ultralytics `predict()` i `val()` domyślnie używają głowicy one-to-many z NMS. Te same wagi z `nms=True` dają bez dodatkowego treningu czwarty wariant, „YOLO26-S o2m+NMS", czyli porównanie z NMS i bez na jednym modelu.
+8. **R1 i R2 z tą samą liczbą iteracji (D).** R2 ma ok. 2× więcej obrazów, więc przy tej samej liczbie epok trenowałby dwa razy dłużej. Dla R2 skaluję liczbę epok tak, by łączna liczba obejrzanych obrazów była taka sama. Różnica R2 − R1 wynika wtedy z treści danych, a nie z długości treningu.
+9. **Tło scen syntetycznych = tło treningu.** R2 i test B składam na pustym talerzu obrotowym, z wycinkami w tym samym oświetleniu co tło. Test B mierzy wtedy samą okluzję. Test A dokłada zmianę tła i obiekty obce, czyli warunki realne.
+10. **Przepis treningu zamrożony po pilocie.** Każdy model trenuję domyślnym przepisem swojego pakietu (augmentacje, optymalizator), z wejściem 640 px i liczbą epok z pilota. Po pilocie zamrażam wersje pakietów, podział danych, rozdzielczość, liczbę epok i regułę checkpointu (sekcja 10).
+
+## 2. Harmonogram
+
+| Okres        | Etap                                                | Kamień                       |
+| ------------ | --------------------------------------------------- | ---------------------------- |
+| 03.11–09.11  | 1. Dane i konwersja, 2. Pilot                       | M1: 10.11 (planowo 03.11)    |
+| 10.11–24.11  | 3. Generator i test B, równolegle 4a. Treningi R1   | M2: 24.11                    |
+| 25.11–15.12  | 4b. Treningi R2, bieżąca ewaluacja                  | M3: 15.12                    |
+| 16.12–12.01  | 5. Analiza, drugie ziarno (przerwa 22.12–06.01)     | M4: 12.01                    |
+| 13.01–01.02  | 6. Raport i slajdy                                  | M5: prezentacja 02.02        |
+
+## 3. Etap 1: dane i konwersja (03–09.11)
+
+**Cel:** D2S w formacie YOLO na Kaggle oraz GT testu A z okluzją każdego obiektu.
+
+- [ ] Pobrać ze [strony MVTec D2S](https://www.mvtec.com/company/research/datasets/mvtec-d2s/downloads): `d2s_images_v1.tar.xz` (6,0 GB; zawiera też 10 000 obrazów augmentowanych przez autorów), `d2s_annotations_v1.1.tar.xz` (40 MB), `d2s_amodal_annotations_v1.tar.xz` (15,3 MB). Obrazy D2S Amodal (4,2 GB) pobrać tylko wtedy, gdy adnotacje amodalne nie pasują do obrazów D2S (artykuł wspomina o zero-paddingu kadrów). Licencja: CC BY-NC-SA 4.0.
+- [ ] Inspekcja danych:
+  - nazwy plików JSON i liczby z tabeli 1 artykułu D2S (train: 4380 obrazów / 6900 obiektów, val: 3600 / 15 654);
+  - id kategorii (czy 1–60) i nazwy klas;
+  - jak odczytać scenę, obrót i oświetlenie obrazu (kolejność id, podzbiory `rot0`/`light0` z paczki adnotacji);
+  - czy obiekty obce (clutter) w walidacji mają adnotacje.
+- [ ] Zgodność D2S Amodal z walidacją D2S: te same obrazy i id, ewentualne przesunięcie przez padding (IoU maski widocznej z D2S Amodal z maską z D2S powinno wynosić ≈ 1).
+- [ ] Lokalne środowisko (venv): `ultralytics`, `rfdetr`, `pycocotools`, `opencv-python`; przypięte wersje w `requirements.txt`.
+- [ ] `scripts/prepare_d2s.py`:
+  - podział treningu: obroty walidacyjne → `valid/`, reszta → `train/`;
+  - ramki COCO `[x, y, w, h]` → YOLO (znormalizowane `cx cy w h`), id kategorii → 0–59, nazwy klas w `data.yaml`;
+  - etykiety `c60` i `c1` (dwa pliki `data.yaml`);
+  - zmniejszenie obrazów do 1024 px dłuższego boku (D): Kaggle ma tylko kilka rdzeni CPU, a dekodowanie JPEG 1920×1440 spowalnia ładowanie danych; etykiety YOLO są znormalizowane, więc się nie zmieniają;
+  - walidacja D2S → `test/` (test A) oraz COCO JSON z GT w tej samej rozdzielczości, z dodatkowymi polami obiektu: `occlusion`, `truncated` (maska amodalna wychodzi poza kadr), `scene_id`;
+  - asercje: liczby obrazów i etykiet, ramka po konwersji tam i z powrotem w granicy 1 px, każda klasa obecna w `train/`.
+- [ ] Kontrola wzrokowa: ok. 20 losowych obrazów z narysowanymi ramkami i klasami, w obu zestawach etykiet.
+- [ ] Histogram okluzji testu A: ile obiektów wpada do każdego przedziału.
+- [ ] Prywatny dataset na Kaggle (`kaggle datasets create`). Kod trafia do notatnika przez `git clone` (przy prywatnym repo: token GitHub w Kaggle Secrets).
+
+**Gotowe, gdy:** oba pakiety wczytują `data.yaml` (1 epoka bez błędu) i znany jest rozkład okluzji testu A.
+
+## 4. Etap 2: pilot i M1 (do 10.11)
+
+**Cel:** potok trening → predykcja → ewaluacja działa end-to-end i znam koszt GPU.
+
+- [ ] `scripts/train.py`: jeden punkt wejścia `--model {yolo11s,yolo26s,rfdetr-s} --regime {R1,R2} --labels {c60,c1} --seed N`; checkpoint co epokę i wznawianie (`resume`), bo sesja Kaggle trwa najwyżej ok. 12 h.
+- [ ] `scripts/predict.py`: predykcje do COCO JSON, próg pewności 0,001, najwyżej 100 detekcji na obraz; YOLO26 w dwóch wariantach (`nms=False` i `nms=True`).
+- [ ] `scripts/evaluate.py` w wersji minimalnej: mAP przez pycocotools i recall per przedział okluzji.
+- [ ] Notatnik Kaggle: instalacja z `requirements.txt`, akcelerator T4 (sprawdzić, czy P100 jest jeszcze wspierany przez aktualny PyTorch), uruchamianie w tle przez „Save & Run All".
+- [ ] Pomiar: każdy z 3 modeli, 2–3 epoki na R1/c60 → czas epoki, pamięć GPU, czy mAP walidacji rośnie.
+- [ ] Rozdzielczość RF-DETR-S: sprawdzić, czy 640 px spełnia wymóg podzielności (natywnie 512 px) (D).
+- [ ] Decyzja o drugim ziarnie (sekcja 9).
+
+**Gotowe (M1), gdy:** jeden model przeszedł cały potok, a czasy epok trzech modeli i decyzja o drugim ziarnie są wpisane do sekcji 9.
+
+## 5. Etap 3: generator scen i test B (10–24.11)
+
+**Cel:** zbiory R2 i test B, w których okluzja każdego obiektu jest znana z konstrukcji. Generator i sposób pomiaru okluzji przechodzą później do pracy magisterskiej, więc mają krótką dokumentację.
+
+- [ ] **Tła:** pusty talerz dla każdego oświetlenia jako mediana pikseli po obrazach treningowych z tym oświetleniem (obiekty stoją w różnych miejscach, więc mediana je usuwa). Jeśli talerz wyraźnie zmienia wygląd z obrotem, osobna mediana dla każdej pary obrót × oświetlenie. Kontrola wzrokowa.
+- [ ] **Pula wycinków:** obiekty z maską (pycocotools), które nie stykają się z innymi maskami ani z krawędzią kadru; zapamiętane oświetlenie źródła. Pula R2 z `train/`, pula testu B z walidacji D2S (okluzja 0 według D2S Amodal).
+- [ ] **Składanie sceny:** losowa liczba obiektów (np. 4–15), środek obiektu na talerzu, losowy obrót w płaszczyźnie, wycinki w oświetleniu tła, wklejanie po kolei z zapamiętaną kolejnością warstw. Wklejanie twarde po masce (maski D2S nie mają marginesów, a autorzy D2S uzyskali tak realistyczne obrazy); ewentualnie wygładzenie krawędzi o 1 px.
+- [ ] **Okluzja:** maska widoczna obiektu = maska pełna minus suma masek wklejonych później; `okluzja = 1 − |widoczna| / |pełna|`.
+- [ ] **Etykiety:** ramka z maski widocznej, tak jak w D2S, na którym modele się uczą i są oceniane. R2: odrzucam położenia, po których widoczna część obiektu ma mniej niż 5000 px (reguła z augmentacji D2S). Test B: obiekty zasłonięte w ponad 80% oznaczam jako ignorowane (`iscrowd=1`); nie wchodzą do recall, a ich wykrycie nie jest fałszywym alarmem.
+- [ ] **Balans testu B:** generuję sceny, aż każdy przedział (0–20, 20–40, 40–60, 60–80%) ma co najmniej 1000 obiektów. Jeśli wysokie przedziały zapełniają się za wolno, tryb celowany: drugi obiekt wklejany tak, by zakrył zadany ułamek pierwszego. Do RQ2 dokładam pary o dużym IoU ramek (produkty ułożone jeden na drugim).
+- [ ] **Rozmiary (D):** R2 = obrazy R1 (ok. 3500) + ok. 3500 scen syntetycznych; test B ok. 1000–2000 obrazów.
+- [ ] Testy z asercjami: dwa prostokąty o znanym pokryciu dają oczekiwaną okluzję; okluzja w [0, 1]; ramki w granicach obrazu.
+- [ ] Kontrola wzrokowa: siatka scen z obrysami i procentem okluzji.
+- [ ] Wysłanie R2 i testu B na Kaggle (nowa wersja datasetu).
+- [ ] Szkic rozdziału „Metody" (dane, podział, generator, pomiar okluzji), póki decyzje są świeże.
+
+**Gotowe (M2), gdy:** R2 i test B są na Kaggle, a rozkłady okluzji testów A i B są na wykresie.
+
+## 6. Etap 4: treningi (4a: 10–24.11, 4b: 25.11–15.12)
+
+Runy R1 nie potrzebują generatora, więc ruszają zaraz po M1, równolegle z Etapem 3. Pierwsze runy R1/c60 (YOLO11-S i RF-DETR-S) są zarazem pilotem zbieżności: trenuję do plateau mAP walidacji, ustalam liczbę epok (YOLO26-S dostaje liczbę epok YOLO11-S) i wpisuję ją do protokołu przed kolejnymi runami.
+
+Nazwa runu: `{model}_{reżim}_{etykiety}_s{ziarno}`, np. `rfdetrs_R2_c60_s1`.
+
+| Grupa          | Modele                        | Runy | Okno                 | Priorytet |
+| -------------- | ----------------------------- | ---- | -------------------- | --------- |
+| R1 · c60 · s0  | YOLO11-S, YOLO26-S, RF-DETR-S | 3    | 10–24.11             | 1         |
+| R1 · c1 · s0   | jw.                           | 3    | 10–24.11             | 2         |
+| R2 · c60 · s0  | jw.                           | 3    | 25.11–15.12          | 1         |
+| R2 · c1 · s0   | jw.                           | 3    | 25.11–15.12          | 2         |
+| R1 · c60 · s1  | jw.                           | 3    | wolny limit od 10.11 | 3         |
+| R2 · c60 · s1  | jw.                           | 3    | wolny limit do 21.12 | 3         |
+
+Bez treningu, na wagach z tabeli: YOLO26-S z `nms=True` (o2m+NMS) oraz przemiatanie progu IoU NMS (0,5 / 0,6 / 0,7 / 0,8) dla YOLO11-S i YOLO26-S o2m.
+
+Ziarno zmienia tylko losowość treningu (Ultralytics: `seed`, `deterministic=True`; w RF-DETR sprawdzić parametr). Dane, w tym zbiór R2, są te same dla obu ziaren.
+
+Po każdym runie:
+
+- [ ] wagi końcowe i predykcje na testach A i B (B, gdy gotowy) zapisane jako wynik notatnika Kaggle, poza gitem;
+- [ ] wiersz w `results/runs.csv`: id runu, wersje pakietów, epoki, godziny GPU, mAP walidacji, gdzie leżą wagi i predykcje;
+- [ ] szybka ewaluacja lokalna, żeby błąd wyszedł od razu, a nie po 12 runach.
+
+**Gotowe (M3), gdy:** 12 runów z ziarnem 0 ma predykcje na obu testach.
+
+## 7. Etap 5: ewaluacja i analiza (16.12–12.01)
+
+### Definicje metryk
+
+- **Dopasowanie:** zachłanne według malejącej pewności, IoU ≥ 0,5, każdy obiekt GT najwyżej raz. Regiony ignorowane nie dają ani TP, ani FP.
+- **Recall_any** (metryka główna): obiekt trafiony ramką dowolnej klasy, czyli „produkt znaleziony". **Recall_cls**: trafiony ramką właściwej klasy (tylko modele c60).
+- **Punkt pracy (D):** dla każdego modelu próg pewności, przy którym precyzja (dowolna klasa) na całym teście A wynosi 0,90; ten sam próg stosuję w teście B. Pewności DETR i YOLO mają różne skale, więc porównuję modele przy tej samej liczbie fałszywych alarmów. Uzupełnienie bez progu: recall przy progu 0,001.
+- **mAP@50:95, mAP@50:** pycocotools, `maxDets=100`.
+- **Udział pomyłek klasy:** `(Recall_any − Recall_cls) / Recall_any` w każdym przedziale.
+- **Przedziały okluzji:** 0–20 / 20–40 / 40–60 / 60–80%; w teście A dodatkowo 80–100% informacyjnie, a obiekty `truncated` osobno. Druga oś do RQ2: największe IoU ramki obiektu z ramką innego obiektu GT (0–0,3 / 0,3–0,5 / 0,5–0,7 / > 0,7). To od niej, a nie od procentu okluzji, zależy, czy NMS może usunąć obiekt.
+- **Niepewność:** 95% CI bootstrapem (1000 losowań) po scenach w teście A i po obrazach w teście B. Dla c60 dodatkowo rozrzut między ziarnami; różnice mniejsze od niego opisuję jako nierozstrzygnięte.
+- **Latencja:** lokalny CPU, batch 1, 640 px, stała liczba wątków, 20 przebiegów rozgrzewki i 200 obrazów z testu A, mediana ms/obraz z post-processingiem (w tym NMS). W tabeli także liczba parametrów i FLOPs: RF-DETR-S ma 32,1 M parametrów, a modele YOLO-S ok. 10 M, więc porównanie dotyczy tej samej klasy szybkości, nie rozmiaru.
+
+### Analiza per pytanie badawcze
+
+- [ ] **RQ1:** krzywe Recall_any względem przedziału okluzji dla wszystkich modeli, osobno dla testów A i B. Tempo spadku: regresja logistyczna `wykryty ~ okluzja` dla każdego modelu; nachylenie i jego CI bootstrapem po scenach; różnice nachyleń między modelami.
+- [ ] **RQ2:** YOLO11-S vs YOLO26-S e2e vs YOLO26-S o2m+NMS (te same wagi) vs RF-DETR-S na osi IoU ramek, plus przemiatanie progu NMS. Porównanie c60 i c1: w c1 NMS tłumi każdą nakładającą się ramkę, w c60 tylko ramki tej samej klasy (domyślnie `agnostic_nms=False`), więc efekt NMS powinien być w c1 silniejszy.
+- [ ] **RQ3:** zysk R2 − R1 w każdym przedziale i dla każdego modelu. Zysk w przedziale 0–20% to efekt ogólny (gęstość sceny, kontekst); o okluzji świadczy dopiero jego wzrost w wyższych przedziałach. Zależność od architektury: interakcja model × reżim.
+- [ ] **RQ4:** dla modeli c60 rozbicie obiektów w każdym przedziale na: nieznalezione / znalezione z błędną klasą / poprawne. Recall_any modelu c60 vs recall modelu c1: czy głowica 60-klasowa pogarsza samą lokalizację. Najczęstsze pary pomylonych klas przy wysokiej okluzji.
+- [ ] Wykresy i tabele: krzywe recall, rozbicie błędów, tabela mAP + latencja; przykłady jakościowe (te same obrazy dla wszystkich modeli).
+- [ ] Runy z drugim ziarnem, jeśli zostały, do 21.12.
+
+**Gotowe (M4), gdy:** każde RQ ma tabelę lub wykres z CI i dwa–trzy zdania wniosku.
+
+## 8. Etap 6: raport i prezentacja (13.01–01.02)
+
+- [ ] Raport po polsku: wstęp (SCO), przegląd literatury, metody (szkic z Etapu 3), wyniki per RQ, dyskusja, ograniczenia, wnioski, związek z pracą magisterską (wybór detektora-lokalizatora w trybie class-agnostic, generator, pomiar okluzji).
+- [ ] Ograniczenia: sceny syntetyczne bez cieni i fizyki układania; jeden zbiór danych; zmiana tła między treningiem a testem A; 1–2 ziarna; różna liczba parametrów; różne domyślne augmentacje pakietów (mozaika Ultralytics sama tworzy obrazy z wieloma obiektami).
+- [ ] Cytowania: D2S (ECCV 2018), D2S Amodal (WACV 2019), RF-DETR, YOLO26, YOLO11.
+- [ ] Slajdy i próba prezentacji.
+- [ ] README z instrukcją odtworzenia: dane → `prepare_d2s.py` → `generate.py` → `train.py` → `predict.py` → `evaluate.py`.
+
+**Gotowe (M5):** prezentacja 02.02.2027.
+
+## 9. Budżet GPU i decyzja M1
+
+Kaggle daje ok. 30 h GPU tygodniowo (sprawdzić aktualny limit konta). Okno 10.11–21.12 to 6 tygodni, czyli ok. 180 h. Przy równej liczbie iteracji run R2 kosztuje tyle co R1. Każdy model ma 6 runów (4 z ziarnem 0, 2 z ziarnem 1), a predykcja to ok. 0,3 h na run.
+
+| Model     | s / epokę (R1) | Epoki | h / run | Runy | h łącznie |
+| --------- | -------------- | ----- | ------- | ---- | --------- |
+| YOLO11-S  |                |       |         | 6    |           |
+| YOLO26-S  |                |       |         | 6    |           |
+| RF-DETR-S |                |       |         | 6    |           |
+
+Reguła z Temat.md: jeśli 18 runów przekracza 80% dostępnych godzin, rezygnuję z drugiego ziarna. Kolejność runów z sekcji 6 zapewnia, że przy cięciach odpadają najpierw runy o najniższym priorytecie.
+
+## 10. Protokół (wypełnić po pilocie, potem bez zmian)
+
+| Pole                                         | Wartość          |
+| -------------------------------------------- | ---------------- |
+| Wersje `ultralytics` / `rfdetr` / `torch`    |                  |
+| Obroty walidacyjne                           |                  |
+| Rozdzielczość obrazów w datasecie / wejście  | 1024 px / 640 px |
+| Epoki R1 (YOLO / RF-DETR)                    |                  |
+| Epoki R2 (równa liczba iteracji)             |                  |
+| Batch, akumulacja gradientu                  |                  |
+| Checkpoint do testów                         | końcowy (last/EMA) |
+| GPU Kaggle                                   |                  |
+| Drugie ziarno                                | tak / nie        |
+
+## 11. Struktura repozytorium
+
+```
+scripts/prepare_d2s.py   konwersja D2S → YOLO (c60, c1), podział, GT testu A z okluzją
+scripts/generate.py      generator copy-paste: tła, wycinki, R2 i test B
+scripts/train.py         trening dowolnego runu z macierzy
+scripts/predict.py       predykcje → COCO JSON
+scripts/evaluate.py      mAP, recall per przedział, pomyłki klas, bootstrap
+scripts/latency.py       pomiar CPU
+notebooks/kaggle.ipynb   cienka nakładka: instalacja, klon repo, train + predict
+tests/                   asercje dla konwersji ramek i liczenia okluzji
+results/                 runs.csv i tabele metryk (małe pliki); wagi i predykcje poza gitem
+requirements.txt         przypięte wersje
+```
+
+Dane (`data/`) są w `.gitignore`.
+
+## 12. Ryzyka
+
+| Ryzyko                                                          | Skutek                                | Reakcja                                                                                                                      |
+| --------------------------------------------------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| M1 przesunięty na 10.11                                         | mniej czasu na generator              | treningi R1 równolegle z Etapem 3; M2 bez zmian                                                                              |
+| Za mało godzin GPU                                              | niepełna macierz                      | priorytety runów; rezygnacja z drugiego ziarna; Colab jako zapas                                                             |
+| D2S Amodal nie pasuje do obrazów D2S                            | brak dokładnej okluzji w teście A     | przybliżenie z nakładania się masek i ramek (Temat.md)                                                                       |
+| Mało obiektów silnie zasłoniętych w teście A (średnio 18%)      | szerokie CI w przedziałach 40–80%     | wnioski dla tych przedziałów głównie z testu B                                                                               |
+| Sceny syntetyczne odbiegają od realnych                         | zysk R2 nie przenosi się na test A    | to też wynik dla RQ3; zawsze raportuję oba testy                                                                             |
+| Generator nie zdąży na 25.11                                    | brak danych R2                        | awaryjnie R2 z obrazów augmentowanych dołączonych do D2S; tylko do treningu, bo powstały z całego treningu D2S              |
+| Zmiany API pakietów                                             | niespójne runy                        | przypięte wersje od M1                                                                                                       |
+| Przerwana sesja Kaggle                                          | utrata postępu                        | checkpoint co epokę i `resume`                                                                                               |
+
+## 13. Decyzje do potwierdzenia
+
+| #   | Decyzja                                                              | Co zmienia w Temat.md                                    | Rekomendacja                                                                 |
+| --- | -------------------------------------------------------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| 1   | Okluzja testu A z D2S Amodal                                         | zastępuje przybliżenie z nakładania się obiektów         | tak, jeśli adnotacje pasują (Etap 1); potem poprawić opis w Temat.md i CLAUDE.md |
+| 2   | Walidacja z 2 obrotów każdej sceny, testy na wagach końcowych        | doprecyzowuje „walidację wydzielam z treningu"           | tak                                                                          |
+| 3   | Wycinki testu B z niezasłoniętych obiektów walidacji D2S             | doprecyzowuje „obrazy nieużyte w treningu"               | tak                                                                          |
+| 4   | Recall przy precyzji 0,90 oraz recall bez progu                      | doprecyzowuje metrykę główną                             | tak                                                                          |
+| 5   | RF-DETR-S przy 640 px zamiast natywnych 512 px                       | doprecyzowuje „ok. 640 px"                               | tak, jeśli 640 jest dozwolone; inaczej najbliższa dozwolona wartość          |
+| 6   | R2 = R1 + tyle samo scen syntetycznych, równa liczba iteracji        | doprecyzowuje reżim R2                                   | tak                                                                          |
+| 7   | Obrazy zmniejszone do 1024 px przed wysłaniem na Kaggle              | nowe                                                     | tak                                                                          |

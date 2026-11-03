@@ -36,4 +36,4 @@ Follow [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.
 ## Repo notes
 
 - `docs/Przegląd/` (literature PDFs) is gitignored and local only.
-- `docs/plan_czytania.md` is the suggested reading order.
+- `docs/Plan.md` is the detailed work plan: stages with task checklists, methodological decisions and open decisions. Tick its checkboxes as tasks get done.

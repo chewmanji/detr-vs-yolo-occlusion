@@ -48,16 +48,13 @@ YOLO26 ma dwie głowice: one-to-one (bez NMS) i opcjonalną one-to-many (z NMS).
 
 ## Związek z pracą magisterską
 
-Temat pracy magisterskiej nie jest jeszcze ustalony: zależy przede wszystkim od tego, czy uzyskam dostęp do danych ze środowiska SCO. Rozważane są dwa kierunki, oba z obszaru computer vision dla kas samoobsługowych. Projekt jest pomyślany tak, by był samodzielny i przydatny niezależnie od ostatecznego wyboru.
+Kierunek pracy magisterskiej jest ustalony i będzie dotyczył rozpoznawania produktów w zbiorze otwartym (open-set) przez embeddingi. Detektor lokalizuje produkty, model embeddingowy dopasowuje każdy wykryty obiekt do bazy referencyjnej asortymentu, a obiekty spoza asortymentu są odrzucane na podstawie progów odległości. Praca zbada, jak okluzja wpływa na identyfikację produktów znanych i na odrzucanie nieznanych, oraz jak ustalać progi odrzucania. Szczegółowy temat i pytania badawcze doprecyzuję jeszcze z promotorem.
 
-| Rozważany kierunek pracy                            | Opis                                                                                                                      | Co wnosi projekt                                                                                                        |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Rozpoznawanie produktów przez embeddingi (open-set) | detektor lokalizuje produkty, model embeddingowy dopasowuje je do bazy referencyjnej i odróżnia obiekty spoza asortymentu | wybór detektora pełniącego rolę lokalizatora, jego skuteczność w trybie class-agnostic, generator scen i pomiar okluzji |
-| Analiza czasowa (krótkie sekwencje wideo)           | analiza kilku sekund nagrania zamiast pojedynczej klatki, by lepiej wykrywać nieskasowane produkty                        | pomiar, ile traci detekcja na pojedynczej klatce przy okluzji – punkt odniesienia dla agregacji wielu klatek            |
+Oba badania dotyczą okluzji, ale na różnych etapach przetwarzania: projekt mierzy, czy detektor znajdzie zasłonięty produkt, a praca – czy znaleziony produkt zostanie poprawnie rozpoznany albo odrzucony.
 
-**Podział wkładu.** Projekt jest samodzielnym badaniem wstępnym względem pracy magisterskiej. Do pracy mogą przejść wyłącznie narzędzia i decyzje projektowe: generator scen copy-paste, sposób pomiaru stopnia okluzji oraz wybór detektora. Praca będzie cytować projekt jako wcześniejszy, osobno zaliczony wkład autora. Wyniki projektu (porównanie architektur, krzywe spadku skuteczności detekcji, odpowiedzi na RQ1–RQ4) nie będą przedstawiane jako wkład pracy.
+**Podział wkładu.** Projekt jest samodzielnym badaniem wstępnym względem pracy magisterskiej. Do pracy mogą przejść wyłącznie narzędzia i decyzje projektowe: wybór detektora pełniącego rolę lokalizatora (w tym jego skuteczność w trybie class-agnostic), generator scen copy-paste oraz sposób pomiaru stopnia okluzji. Wyniki projektu (porównanie architektur, krzywe spadku skuteczności detekcji, odpowiedzi na RQ1–RQ4) nie będą przedstawiane jako wkład pracy.
 
-Wkład pracy zaczyna się tam, gdzie kończy się projekt. W kierunku open-set jest to dopasowanie produktów do bazy referencyjnej, odrzucanie obiektów spoza asortymentu i progi decyzyjne; w kierunku czasowym – agregacja informacji z wielu klatek. Projekt ogranicza się do publicznych danych i nie obejmuje embeddingów ani analizy wideo; te elementy należą wyłącznie do pracy magisterskiej. Podział doprecyzuję po ustaleniu jej tematu.
+Wkład pracy zaczyna się tam, gdzie kończy się projekt: dopasowanie produktów do bazy referencyjnej, odrzucanie obiektów spoza asortymentu, progi decyzyjne i wpływ okluzji na te elementy. Projekt ogranicza się do publicznych danych i detekcji w zamkniętym zbiorze 60 klas; nie obejmuje embeddingów ani progów odrzucania – te elementy należą wyłącznie do pracy magisterskiej.
 
 Licencje wymuszają czysty podział: MVTec D2S nie może być używany komercyjnie, a pakiet Ultralytics jest na licencji AGPL-3.0. Projekt pozostaje więc czysto akademicki.
 
@@ -72,7 +69,7 @@ gantt
     axisFormat %d.%m
     section Przygotowanie
     Zatwierdzenie tematu        :milestone, m0, 2026-10-13, 0d
-    Literatura i środowisko     :lit, 2026-10-13, 2026-10-27
+    Literatura i środowisko     :lit, 2026-10-13, 2026-11-03
     Dane D2S i konwersja        :dane, 2026-10-20, 2026-11-03
     M1 pierwszy trening         :milestone, m1, 2026-11-03, 0d
     section Dane syntetyczne
@@ -95,77 +92,23 @@ Kamień M1 to także punkt decyzyjny: jeśli pomiar czasu epoki RF-DETR pokaże,
 
 ## Załącznik: materiały do przeglądu literatury
 
-Priorytet „wysoki” oznacza pozycje, które warto przeczytać w całości przed startem eksperymentów; resztę wystarczy przejrzeć (abstrakt, wnioski, kluczowe rysunki).
-
-### Badane modele
-
-| Źródło                                                                                                                   | Typ      | Po co                                           | Priorytet |
-| ------------------------------------------------------------------------------------------------------------------------ | -------- | ----------------------------------------------- | --------- |
-| [RF-DETR: Neural Architecture Search for Real-Time Detection Transformers](https://arxiv.org/abs/2511.09554) (ICLR 2026) | artykuł  | architektura RF-DETR, porównania z YOLO         | wysoki    |
-| [Ultralytics YOLO26: Unified Real-Time End-to-End Vision Models](https://arxiv.org/abs/2606.03748)                       | artykuł  | dwie głowice, inferencja bez NMS                | wysoki    |
-| [Ultralytics YOLO Evolution: YOLO26, YOLO11, YOLOv8, YOLOv5](https://arxiv.org/abs/2510.09653)                           | przegląd | różnice między YOLO11 a YOLO26 w jednym miejscu | wysoki    |
-| [LW-DETR](https://arxiv.org/abs/2406.03459)                                                                              | artykuł  | architektura, na której bazuje RF-DETR          | średni    |
-| [DINOv2](https://arxiv.org/abs/2304.07193)                                                                               | artykuł  | backbone RF-DETR                                | średni    |
-| [YOLOv10: Real-Time End-to-End Object Detection](https://arxiv.org/abs/2405.14458)                                       | artykuł  | geneza podejścia NMS-free w rodzinie YOLO       | średni    |
-
-### Podstawy architektur detekcji
-
-| Źródło                                                                                                  | Typ               | Po co                                                              | Priorytet |
-| ------------------------------------------------------------------------------------------------------- | ----------------- | ------------------------------------------------------------------ | --------- |
-| [DETR: End-to-End Object Detection with Transformers](https://arxiv.org/abs/2005.12872)                 | artykuł           | detekcja jako predykcja zbioru, dopasowanie węgierskie zamiast NMS | wysoki    |
-| [You Only Look Once (YOLO v1)](https://arxiv.org/abs/1506.02640)                                        | artykuł           | idea detektora jednoetapowego                                      | średni    |
-| [Deformable DETR](https://arxiv.org/abs/2010.04159)                                                     | artykuł           | jak przyspieszono uczenie DETR                                     | średni    |
-| [RT-DETR: DETRs Beat YOLOs on Real-time Object Detection](https://arxiv.org/abs/2304.08069)             | artykuł           | pierwszy transformerowy detektor czasu rzeczywistego               | średni    |
-| [Vision Transformer (ViT)](https://arxiv.org/abs/2010.11929)                                            | artykuł           | podstawy transformerów w wizji                                     | średni    |
-| [ResNet](https://arxiv.org/abs/1512.03385)                                                              | artykuł           | klasyczny backbone CNN                                             | niski     |
-| [Dive into Deep Learning – rozdział Computer Vision](https://d2l.ai/chapter_computer-vision/index.html) | podręcznik online | anchor boxy, IoU, NMS, mAP z kodem                                 | wysoki    |
-| [Stanford CS231n](https://cs231n.stanford.edu/)                                                         | kurs              | uporządkowanie podstaw CNN i detekcji                              | średni    |
-
-### Okluzja, gęste sceny i NMS
-
-| Źródło                                                                                                 | Typ             | Po co                                               | Priorytet |
-| ------------------------------------------------------------------------------------------------------ | --------------- | --------------------------------------------------- | --------- |
-| [Occlusion Handling in Generic Object Detection: A Review](https://arxiv.org/abs/2101.08845)           | przegląd        | taksonomia problemów i metod okluzji                | wysoki    |
-| [Survey of Occlusion-Handling Approaches (Electronics, 2024)](https://www.mdpi.com/2079-9292/13/3/541) | przegląd        | nowszy przegląd z ewaluacją detektorów przy okluzji | średni    |
-| [Adaptive NMS: Refining Pedestrian Detection in a Crowd](https://arxiv.org/abs/1904.03629)             | artykuł         | dlaczego stały próg NMS zawodzi w tłumie            | wysoki    |
-| [Soft-NMS](https://arxiv.org/abs/1704.04503)                                                           | artykuł         | klasyczna alternatywa dla twardego NMS              | średni    |
-| [CrowdHuman](https://arxiv.org/abs/1805.00123)                                                         | artykuł / zbiór | jak mierzyć detekcję w gęstych scenach              | niski     |
-| [Intriguing Properties of Vision Transformers](https://arxiv.org/abs/2105.10497) (NeurIPS 2021)        | artykuł         | odporność ViT vs CNN na okluzję – źródło hipotezy   | wysoki    |
-| [Robustness of object recognition under extreme occlusion](https://arxiv.org/abs/1905.04598)           | artykuł         | ludzie vs modele przy silnej okluzji                | niski     |
-
-### Augmentacja i dane syntetyczne
-
-| Źródło                                                                                                 | Typ     | Po co                                | Priorytet |
-| ------------------------------------------------------------------------------------------------------ | ------- | ------------------------------------ | --------- |
-| [Simple Copy-Paste is a Strong Data Augmentation Method](https://arxiv.org/abs/2012.07177) (CVPR 2021) | artykuł | podstawa reżimu R2                   | wysoki    |
-| [Cut, Paste and Learn](https://arxiv.org/abs/1708.01642)                                               | artykuł | synteza scen z wycinków obiektów     | średni    |
-| [Cutout](https://arxiv.org/abs/1708.04552)                                                             | artykuł | okluzja prostokątna jako augmentacja | niski     |
-| [Random Erasing](https://arxiv.org/abs/1708.04896)                                                     | artykuł | jw., wariant losowy                  | niski     |
-
-### Dane (retail / automatyczna kasa)
-
-| Źródło                                                                                       | Typ          | Po co                              | Priorytet |
-| -------------------------------------------------------------------------------------------- | ------------ | ---------------------------------- | --------- |
-| [MVTec D2S – artykuł](https://arxiv.org/abs/1804.08292) (ECCV 2018)                          | artykuł      | opis zbioru, wyniki bazowe         | wysoki    |
-| [MVTec D2S – strona i pobieranie](https://www.mvtec.com/company/research/datasets/mvtec-d2s) | zbiór danych | licencja, pliki, format adnotacji  | wysoki    |
-| [RPC: A Large-Scale Retail Product Checkout Dataset](https://arxiv.org/abs/1901.07249)       | artykuł      | zbiór zapasowy, poziomy trudności  | średni    |
-| [RPC – strona zbioru](https://rpc-dataset.github.io/)                                        | zbiór danych | pobieranie                         | niski     |
-| [SKU-110K: Precise Detection in Densely Packed Scenes](https://arxiv.org/abs/1904.00853)     | artykuł      | detekcja gęsto ułożonych produktów | średni    |
-| [COCO](https://arxiv.org/abs/1405.0312)                                                      | artykuł      | protokół metryk mAP                | niski     |
-
-### Narzędzia, dokumentacje i tutoriale
-
-| Źródło                                                                                                   | Typ          | Po co                                      |
-| -------------------------------------------------------------------------------------------------------- | ------------ | ------------------------------------------ |
-| [Ultralytics – YOLO26](https://docs.ultralytics.com/models/yolo26/)                                      | dokumentacja | modele, tryb end-to-end                    |
-| [Ultralytics – YOLO11](https://docs.ultralytics.com/models/yolo11/)                                      | dokumentacja | model bazowy z NMS                         |
-| [Ultralytics – trening](https://docs.ultralytics.com/modes/train/)                                       | dokumentacja | parametry treningu, augmentacje            |
-| [Ultralytics – format zbioru detekcyjnego](https://docs.ultralytics.com/datasets/detect/)                | dokumentacja | konwersja D2S do formatu YOLO              |
-| [Ultralytics – metryki](https://docs.ultralytics.com/guides/yolo-performance-metrics/)                   | poradnik     | interpretacja mAP, precision, recall       |
-| [Ultralytics – GitHub](https://github.com/ultralytics/ultralytics)                                       | kod          | źródła, issues                             |
-| [RF-DETR – trening](https://rfdetr.roboflow.com/latest/learn/train/)                                     | dokumentacja | trening na własnym zbiorze (COCO lub YOLO) |
-| [RF-DETR – GitHub](https://github.com/roboflow/rf-detr)                                                  | kod          | źródła, przykładowe notebooki              |
-| [How to Train RF-DETR on a Custom Dataset](https://blog.roboflow.com/train-rf-detr-on-a-custom-dataset/) | tutorial     | trening krok po kroku                      |
-| [COCO – opis metryk detekcji](https://cocodataset.org/#detection-eval)                                   | dokumentacja | definicje AP, AR, progi IoU                |
-
-Linki do artykułów RF-DETR, YOLO26, D2S, RPC, Copy-Paste, Adaptive NMS, przeglądu okluzji i ViT zostały zweryfikowane 11.10.2026.
+- Podstawy detekcji i transformerów
+  1. You Only Look Once: Unified, Real-Time Object Detection: https://arxiv.org/abs/1506.02640
+  2. Attention Is All You Need: https://arxiv.org/abs/1706.03762
+  3. An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale (ViT): https://arxiv.org/abs/2010.11929
+  4. End-to-End Object Detection with Transformers (DETR): https://arxiv.org/abs/2005.12872
+  5. Deformable DETR: Deformable Transformers for End-to-End Object Detection: https://arxiv.org/abs/2010.04159
+- Problem okluzji
+  1.  Occlusion Handling in Generic Object Detection: A Review: https://arxiv.org/abs/2101.08845
+  2.  Intriguing Properties of Vision Transformers: https://arxiv.org/abs/2105.10497
+- Porównywane modele
+  1.  Ultralytics YOLO Evolution: YOLO26, YOLO11, YOLOv8, YOLOv5: https://arxiv.org/abs/2510.09653
+  2.  Ultralytics YOLO26: Unified Real-Time End-to-End Vision Models: https://arxiv.org/abs/2606.03748
+  3.  DINOv2: Learning Robust Visual Features without Supervision: https://arxiv.org/abs/2304.07193
+  4.  LW-DETR: A Transformer Replacement to YOLO for Real-Time Detection: https://arxiv.org/abs/2406.03459
+  5.  RF-DETR: Neural Architecture Search for Real-Time Detection Transformers: https://arxiv.org/abs/2511.09554
+- Augmentacja i generowanie okluzji
+  1.  Cut, Paste and Learn: Surprisingly Easy Synthesis for Instance Detection: https://arxiv.org/abs/1708.01642
+  2.  Simple Copy-Paste is a Strong Data Augmentation Method for Instance Segmentation: https://arxiv.org/abs/2012.07177
+- Zbiór danych
+  1.  MVTec D2S: Densely Segmented Supermarket Dataset: https://arxiv.org/abs/1804.08292
