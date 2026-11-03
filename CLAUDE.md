@@ -4,13 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Status
 
-Environment set up, no code yet. Python 3.11 with dependencies managed by uv (`pyproject.toml` + `uv.lock`):
+Data preparation done; training code not written yet. Python 3.11 with dependencies managed by uv (`pyproject.toml` + `uv.lock`):
 
 - `uv sync` installs the locked environment into `.venv`
 - `uv run python <script>` runs inside it
-- `uv add <pkg>` adds a dependency
+- `uv add <pkg>` adds a dependency (`--dev` for tools)
+- `uv run ruff check .` lints, `uv run ruff format .` formats and `uv run pyright` type-checks; run all three before committing. Config is in `pyproject.toml`: line length 120, type hints required on every function. Pyright uses the same engine and config as Pylance and checks only `scripts/`; add new code folders to its `include`
+- `uv run python scripts/prepare_d2s.py` builds `data/d2s_yolo/` from `data/d2s` and `data/d2s_amodal` (about 5 min): `c60/` and `c1/` YOLO datasets readable by both packages, plus `test_a_gt.json` with per-object `occlusion` and `truncated`. It refuses to overwrite an existing output; its asserts are the checks.
 
-Locally torch is the CPU build, used for data prep, evaluation and CPU latency. Training runs on Kaggle, which keeps its own CUDA torch and installs only the locked `ultralytics` and `rfdetr` versions. There are no tests or lint yet; add their commands here once they exist.
+Locally torch is the CPU build, used for data prep, evaluation and CPU latency. Training runs on Kaggle, which keeps its own CUDA torch and installs only the locked `ultralytics` and `rfdetr` versions. There is no test suite yet: scripts check themselves with asserts.
 
 ## Project
 

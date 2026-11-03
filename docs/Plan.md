@@ -50,18 +50,18 @@ Decyzje, które doprecyzowują lub zmieniają Temat.md, są zebrane w sekcji 13;
   - [x] obiekty obce (clutter) nie mają adnotacji (sprawdzone wzrokowo na podzbiorze `_clutter`: 18 scen, 540 obrazów). Ich wykrycie liczy się jako fałszywy alarm, więc wpływa na precyzję i punkt pracy, a nie na recall. D2S Amodal liczy zasłonięcie przez nie jako okluzję (np. butelki częściowo zasłonięte klockiem: 19–21%), więc pula wycinków testu B (okluzja 0) sama pomija takie obiekty.
 - [x] Zgodność D2S Amodal z walidacją D2S (sekcja 1, punkt 1).
 - [x] Środowisko przez uv: Python 3.11, `pyproject.toml` + `uv.lock` (`ultralytics` 8.4.201, `rfdetr` 1.11.2, `pycocotools`; lokalnie torch 2.15 w wersji CPU). `uv sync` odtwarza środowisko.
-- [ ] `scripts/prepare_d2s.py`:
+- [x] `scripts/prepare_d2s.py` (`uv run python scripts/prepare_d2s.py`, ok. 5 min, wynik w `data/d2s_yolo/`, 1,3 GB):
   - podział treningu: obroty walidacyjne → `valid/`, reszta → `train/`;
   - ramki COCO `[x, y, w, h]` → YOLO (znormalizowane `cx cy w h`), id kategorii → 0–59, nazwy klas w `data.yaml`;
   - etykiety `c60` i `c1` (dwa pliki `data.yaml`);
   - zmniejszenie obrazów do 1024 px dłuższego boku: Kaggle ma tylko kilka rdzeni CPU, a dekodowanie JPEG 1920×1440 spowalnia ładowanie danych; etykiety YOLO są znormalizowane, więc się nie zmieniają;
-  - walidacja D2S → `test/` (test A) oraz COCO JSON z GT w tej samej rozdzielczości, z dodatkowymi polami obiektu: `occlusion`, `truncated` (maska amodalna wychodzi poza kadr), `scene_id`;
+  - walidacja D2S → `test/` (test A) oraz `test_a_gt.json` (COCO GT w tej samej rozdzielczości) z polami obiektu `occlusion` i `truncated` (ponad 1% maski amodalnej poza kadrem; oba `null` dla obiektu bez adnotacji amodalnej) oraz `scene_id` obrazu;
   - asercje: liczby obrazów i etykiet, ramka po konwersji tam i z powrotem w granicy 1 px, każda klasa obecna w `train/`.
-- [ ] Kontrola wzrokowa: ok. 20 losowych obrazów z narysowanymi ramkami i klasami, w obu zestawach etykiet.
+- [x] Kontrola: loadery Ultralytics i RF-DETR wczytują wszystkie podziały w obu trybach z tymi samymi liczbami (train 3504 obrazy / 5520 obiektów, valid 876 / 1380, test 3600 / 15 683). Etykiety narysowane z powrotem na 4 obrazach (train, valid, 2× test) pasują do obiektów.
 - [x] Rozkład okluzji testu A (sekcja 1, punkt 1).
-- [ ] Prywatny dataset na Kaggle (`kaggle datasets create`). Kod trafia do notatnika przez `git clone` (przy prywatnym repo: token GitHub w Kaggle Secrets).
+- [ ] Prywatny dataset na Kaggle (`kaggle datasets create`) z `data/d2s_yolo/`, bez plików `labels.cache` (Ultralytics tworzy je przy lokalnym wczytaniu i zapisuje w nich lokalne ścieżki). Obrazy `c1` to lokalnie twarde dowiązania do `c60`, więc upload ma ok. 2,6 GB. Kod trafia do notatnika przez `git clone` (przy prywatnym repo: token GitHub w Kaggle Secrets).
 
-**Gotowe, gdy:** oba pakiety wczytują `data.yaml` (1 epoka bez błędu).
+**Gotowe, gdy:** oba pakiety wczytują `data.yaml` (sprawdzone lokalnie) i przechodzą 1 epokę bez błędu (w pilocie na Kaggle).
 
 ## 4. Etap 2: pilot i M1 (do 10.11)
 
