@@ -7,3 +7,15 @@ dependencies = [
     "rfdetr>=1.11.2",
     "ultralytics>=8.4.201",
 ]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.17.3",
+]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+# pycodestyle, pyflakes, isort, bugbear, pyupgrade, and type hints required on every function
+select = ["E", "W", "F", "I", "B", "UP", "ANN"]
