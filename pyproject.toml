@@ -4,7 +4,7 @@ version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
     "pycocotools>=2.0.11",
-    "rfdetr>=1.11.2",
+    "rfdetr[train]>=1.11.2",
     "ultralytics>=8.4.201",
 ]
 

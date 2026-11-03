@@ -18,6 +18,7 @@ Decyzje, które doprecyzowują lub zmieniają Temat.md, są zebrane w sekcji 13;
    | Sceny   | 108  | 55    | 25     | 10     | 2      | 1       |
 
    Każda scena to te same obiekty na 30 zdjęciach, więc o wiarygodności przedziału decyduje liczba scen. Test A wystarcza do 0–40%, słabo do 40–60%; o przedziale 60–80% rozstrzyga test B.
+
 2. **Scena jako jednostka danych.** Każda scena D2S to 30 zdjęć (10 obrotów co 36° × 3 oświetlenia), czyli prawie duplikaty. Numer obrazu koduje scenę, obrót i oświetlenie: `id = scena × 100 + k`, obrót = `k % 10`, oświetlenie = `k // 10` (trening: 146 scen, walidacja: 120). Zdjęcia jednej sceny nigdy nie trafiają jednocześnie do treningu i do testów, a przedziały ufności w teście A liczę bootstrapem po 120 scenach, nie po 3600 obrazach.
 3. **Walidacja z obrotów, tylko do monitorowania.** Trening D2S ma tylko 146 scen: 12 klas ma jedną scenę, a 23 klasy dwie. Wydzielenie całych scen usunęłoby więc niektóre klasy z treningu. Do walidacji idą 2 z 10 obrotów każdej sceny treningowej (np. 4 i 9, wszystkie oświetlenia). Taka walidacja jest optymistyczna, więc służy tylko do śledzenia zbieżności i łapania błędów. Do testów biorę wagi końcowe (last/EMA) po ustalonej liczbie epok, bez wybierania najlepszego checkpointu; reguła jest ta sama dla wszystkich modeli.
 4. **Wycinki do testu B z walidacji D2S.** Źródłem są obiekty walidacji D2S bez okluzji i nieucięte krawędzią kadru (według D2S Amodal). Spełnia to warunek „obrazy nieużyte w treningu" i nie zabiera i tak skromnych scen treningowych. Wycinki do R2 pochodzą tylko z części treningowej (bez obrotów walidacyjnych).
@@ -30,13 +31,13 @@ Decyzje, które doprecyzowują lub zmieniają Temat.md, są zebrane w sekcji 13;
 
 ## 2. Harmonogram
 
-| Okres        | Etap                                                | Kamień                       |
-| ------------ | --------------------------------------------------- | ---------------------------- |
-| 03.11–09.11  | 1. Dane i konwersja, 2. Pilot                       | M1: 10.11 (planowo 03.11)    |
-| 10.11–24.11  | 3. Generator i test B, równolegle 4a. Treningi R1   | M2: 24.11                    |
-| 25.11–15.12  | 4b. Treningi R2, bieżąca ewaluacja                  | M3: 15.12                    |
-| 16.12–12.01  | 5. Analiza, drugie ziarno (przerwa 22.12–06.01)     | M4: 12.01                    |
-| 13.01–01.02  | 6. Raport i slajdy                                  | M5: prezentacja 02.02        |
+| Okres       | Etap                                              | Kamień                    |
+| ----------- | ------------------------------------------------- | ------------------------- |
+| 03.11–09.11 | 1. Dane i konwersja, 2. Pilot                     | M1: 10.11 (planowo 03.11) |
+| 10.11–24.11 | 3. Generator i test B, równolegle 4a. Treningi R1 | M2: 24.11                 |
+| 25.11–15.12 | 4b. Treningi R2, bieżąca ewaluacja                | M3: 15.12                 |
+| 16.12–12.01 | 5. Analiza, drugie ziarno (przerwa 22.12–06.01)   | M4: 12.01                 |
+| 13.01–01.02 | 6. Raport i slajdy                                | M5: prezentacja 02.02     |
 
 ## 3. Etap 1: dane i konwersja (03–09.11)
 
@@ -59,7 +60,7 @@ Decyzje, które doprecyzowują lub zmieniają Temat.md, są zebrane w sekcji 13;
   - asercje: liczby obrazów i etykiet, ramka po konwersji tam i z powrotem w granicy 1 px, każda klasa obecna w `train/`.
 - [x] Kontrola: loadery Ultralytics i RF-DETR wczytują wszystkie podziały w obu trybach z tymi samymi liczbami (train 3504 obrazy / 5520 obiektów, valid 876 / 1380, test 3600 / 15 683). Etykiety narysowane z powrotem na 4 obrazach (train, valid, 2× test) pasują do obiektów.
 - [x] Rozkład okluzji testu A (sekcja 1, punkt 1).
-- [ ] Prywatny dataset na Kaggle (`kaggle datasets create`) z `data/d2s_yolo/`, bez plików `labels.cache` (Ultralytics tworzy je przy lokalnym wczytaniu i zapisuje w nich lokalne ścieżki). Obrazy `c1` to lokalnie twarde dowiązania do `c60`, więc upload ma ok. 2,6 GB. Kod trafia do notatnika przez `git clone` (przy prywatnym repo: token GitHub w Kaggle Secrets).
+- [x] Prywatny dataset na Kaggle (`kaggle datasets create -p 'data\d2s_yolo' --dir-mode zip`) z `data/d2s_yolo/`, bez plików `labels.cache` (Ultralytics tworzy je przy lokalnym wczytaniu i zapisuje w nich lokalne ścieżki). Obrazy `c1` to lokalnie twarde dowiązania do `c60`, więc upload ma ok. 2,6 GB. CLI: `uv tool run --env-file .env --with six kaggle ...`; token jako `KAGGLE_API_TOKEN` w `.env`, który jest w `.gitignore` (pakiet `kaggle` 2.2.5 nie deklaruje zależności `six`). Na Windows ścieżka `-p` musi mieć `\`, nie `/`: CLI 2.2.5 zamienia w nazwie pliku postępu tylko separator systemowy i upload pojedynczych plików się wywraca. Repo jest publiczne, więc notatnik klonuje je zwykłym `git clone`.
 
 **Gotowe, gdy:** oba pakiety wczytują `data.yaml` (sprawdzone lokalnie) i przechodzą 1 epokę bez błędu (w pilocie na Kaggle).
 
@@ -70,7 +71,7 @@ Decyzje, które doprecyzowują lub zmieniają Temat.md, są zebrane w sekcji 13;
 - [ ] `scripts/train.py`: jeden punkt wejścia `--model {yolo11s,yolo26s,rfdetr-s} --regime {R1,R2} --labels {c60,c1} --seed N`; checkpoint co epokę i wznawianie (`resume`), bo sesja Kaggle trwa najwyżej ok. 12 h.
 - [ ] `scripts/predict.py`: predykcje do COCO JSON, próg pewności 0,001, najwyżej 100 detekcji na obraz; YOLO26 w dwóch wariantach (`nms=False` i `nms=True`).
 - [ ] `scripts/evaluate.py` w wersji minimalnej: mAP przez pycocotools i recall per przedział okluzji.
-- [ ] Notatnik Kaggle: instalacja `ultralytics` i `rfdetr` w wersjach z `uv.lock`, bez nadpisywania torcha z obrazu Kaggle (wersję torcha zapisać w protokole); akcelerator T4 (sprawdzić, czy P100 jest jeszcze wspierany przez aktualny PyTorch), uruchamianie w tle przez „Save & Run All".
+- [ ] Notatnik Kaggle: instalacja `ultralytics` i `rfdetr[train]` (bez dodatku `train` RF-DETR nie trenuje) w wersjach z `uv.lock`, bez nadpisywania torcha z obrazu Kaggle (wersję torcha zapisać w protokole); akcelerator T4 (sprawdzić, czy P100 jest jeszcze wspierany przez aktualny PyTorch), uruchamianie w tle przez „Save & Run All".
 - [ ] Pomiar: każdy z 3 modeli, 2–3 epoki na R1/c60 → czas epoki, pamięć GPU, czy mAP walidacji rośnie.
 - [ ] Rozdzielczość RF-DETR-S: sprawdzić, czy 640 px spełnia wymóg podzielności (natywnie 512 px); jeśli nie, najbliższa dozwolona wartość.
 - [ ] Decyzja o drugim ziarnie (sekcja 9).
@@ -101,14 +102,14 @@ Runy R1 nie potrzebują generatora, więc ruszają zaraz po M1, równolegle z Et
 
 Nazwa runu: `{model}_{reżim}_{etykiety}_s{ziarno}`, np. `rfdetrs_R2_c60_s1`.
 
-| Grupa          | Modele                        | Runy | Okno                 | Priorytet |
-| -------------- | ----------------------------- | ---- | -------------------- | --------- |
-| R1 · c60 · s0  | YOLO11-S, YOLO26-S, RF-DETR-S | 3    | 10–24.11             | 1         |
-| R1 · c1 · s0   | jw.                           | 3    | 10–24.11             | 2         |
-| R2 · c60 · s0  | jw.                           | 3    | 25.11–15.12          | 1         |
-| R2 · c1 · s0   | jw.                           | 3    | 25.11–15.12          | 2         |
-| R1 · c60 · s1  | jw.                           | 3    | wolny limit od 10.11 | 3         |
-| R2 · c60 · s1  | jw.                           | 3    | wolny limit do 21.12 | 3         |
+| Grupa         | Modele                        | Runy | Okno                 | Priorytet |
+| ------------- | ----------------------------- | ---- | -------------------- | --------- |
+| R1 · c60 · s0 | YOLO11-S, YOLO26-S, RF-DETR-S | 3    | 10–24.11             | 1         |
+| R1 · c1 · s0  | jw.                           | 3    | 10–24.11             | 2         |
+| R2 · c60 · s0 | jw.                           | 3    | 25.11–15.12          | 1         |
+| R2 · c1 · s0  | jw.                           | 3    | 25.11–15.12          | 2         |
+| R1 · c60 · s1 | jw.                           | 3    | wolny limit od 10.11 | 3         |
+| R2 · c60 · s1 | jw.                           | 3    | wolny limit do 21.12 | 3         |
 
 Bez treningu, na wagach z tabeli: YOLO26-S z `nms=True` (o2m+NMS) oraz przemiatanie progu IoU NMS (0,5 / 0,6 / 0,7 / 0,8) dla YOLO11-S i YOLO26-S o2m.
 
@@ -170,17 +171,17 @@ Reguła z Temat.md: jeśli 18 runów przekracza 80% dostępnych godzin, rezygnuj
 
 ## 10. Protokół (wypełnić po pilocie, potem bez zmian)
 
-| Pole                                         | Wartość          |
-| -------------------------------------------- | ---------------- |
-| Wersje `ultralytics` / `rfdetr` / `torch`    |                  |
-| Obroty walidacyjne                           |                  |
-| Rozdzielczość obrazów w datasecie / wejście  | 1024 px / 640 px |
-| Epoki R1 (YOLO / RF-DETR)                    |                  |
-| Epoki R2 (równa liczba iteracji)             |                  |
-| Batch, akumulacja gradientu                  |                  |
-| Checkpoint do testów                         | końcowy (last/EMA) |
-| GPU Kaggle                                   |                  |
-| Drugie ziarno                                | tak / nie        |
+| Pole                                        | Wartość            |
+| ------------------------------------------- | ------------------ |
+| Wersje `ultralytics` / `rfdetr` / `torch`   |                    |
+| Obroty walidacyjne                          |                    |
+| Rozdzielczość obrazów w datasecie / wejście | 1024 px / 640 px   |
+| Epoki R1 (YOLO / RF-DETR)                   |                    |
+| Epoki R2 (równa liczba iteracji)            |                    |
+| Batch, akumulacja gradientu                 |                    |
+| Checkpoint do testów                        | końcowy (last/EMA) |
+| GPU Kaggle                                  |                    |
+| Drugie ziarno                               | tak / nie          |
 
 ## 11. Struktura repozytorium
 
@@ -201,25 +202,25 @@ Dane (`data/`) są w `.gitignore`.
 
 ## 12. Ryzyka
 
-| Ryzyko                                                          | Skutek                                | Reakcja                                                                                                                      |
-| --------------------------------------------------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| M1 przesunięty na 10.11                                         | mniej czasu na generator              | treningi R1 równolegle z Etapem 3; M2 bez zmian                                                                              |
-| Za mało godzin GPU                                              | niepełna macierz                      | priorytety runów; rezygnacja z drugiego ziarna; Colab jako zapas                                                             |
-| D2S Amodal nie pasuje do obrazów D2S                            | brak dokładnej okluzji w teście A     | przybliżenie z nakładania się masek i ramek (Temat.md)                                                                       |
-| Mało silnie zasłoniętych obiektów w teście A (40–60%: 10 scen, 60–80%: 2 sceny) | test A nie rozstrzyga powyżej 40% | wnioski dla 40–80% z testu B; test A tylko potwierdza kierunek trendu                                       |
-| Sceny syntetyczne odbiegają od realnych                         | zysk R2 nie przenosi się na test A    | to też wynik dla RQ3; zawsze raportuję oba testy                                                                             |
-| Generator nie zdąży na 25.11                                    | brak danych R2                        | awaryjnie R2 z obrazów augmentowanych dołączonych do D2S; tylko do treningu, bo powstały z całego treningu D2S              |
-| Zmiany API pakietów                                             | niespójne runy                        | przypięte wersje od M1                                                                                                       |
-| Przerwana sesja Kaggle                                          | utrata postępu                        | checkpoint co epokę i `resume`                                                                                               |
+| Ryzyko                                                                          | Skutek                             | Reakcja                                                                                                        |
+| ------------------------------------------------------------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| M1 przesunięty na 10.11                                                         | mniej czasu na generator           | treningi R1 równolegle z Etapem 3; M2 bez zmian                                                                |
+| Za mało godzin GPU                                                              | niepełna macierz                   | priorytety runów; rezygnacja z drugiego ziarna; Colab jako zapas                                               |
+| D2S Amodal nie pasuje do obrazów D2S                                            | brak dokładnej okluzji w teście A  | przybliżenie z nakładania się masek i ramek (Temat.md)                                                         |
+| Mało silnie zasłoniętych obiektów w teście A (40–60%: 10 scen, 60–80%: 2 sceny) | test A nie rozstrzyga powyżej 40%  | wnioski dla 40–80% z testu B; test A tylko potwierdza kierunek trendu                                          |
+| Sceny syntetyczne odbiegają od realnych                                         | zysk R2 nie przenosi się na test A | to też wynik dla RQ3; zawsze raportuję oba testy                                                               |
+| Generator nie zdąży na 25.11                                                    | brak danych R2                     | awaryjnie R2 z obrazów augmentowanych dołączonych do D2S; tylko do treningu, bo powstały z całego treningu D2S |
+| Zmiany API pakietów                                                             | niespójne runy                     | przypięte wersje od M1                                                                                         |
+| Przerwana sesja Kaggle                                                          | utrata postępu                     | checkpoint co epokę i `resume`                                                                                 |
 
 ## 13. Decyzje do potwierdzenia
 
-| #   | Decyzja                                                              | Co zmienia w Temat.md                                    | Status                                                                       |
-| --- | -------------------------------------------------------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| 1   | Okluzja testu A z D2S Amodal                                         | zastępuje przybliżenie z nakładania się obiektów         | przyjęte, sprawdzone na danych; Temat.md i CLAUDE.md zaktualizowane          |
-| 2   | Walidacja z 2 obrotów każdej sceny, testy na wagach końcowych        | doprecyzowuje „walidację wydzielam z treningu"           | przyjęte                                                                     |
-| 3   | Wycinki testu B z niezasłoniętych obiektów walidacji D2S             | doprecyzowuje „obrazy nieużyte w treningu"               | przyjęte                                                                     |
-| 4   | Recall przy precyzji 0,90 oraz recall bez progu                      | doprecyzowuje metrykę główną                             | przyjęte                                                                     |
-| 5   | RF-DETR-S przy 640 px zamiast natywnych 512 px                       | doprecyzowuje „ok. 640 px"                               | przyjęte; jeśli 640 niedozwolone, najbliższa dozwolona wartość               |
-| 6   | R2 = R1 + tyle samo scen syntetycznych, równa liczba iteracji        | doprecyzowuje reżim R2                                   | przyjęte                                                                     |
-| 7   | Obrazy zmniejszone do 1024 px przed wysłaniem na Kaggle              | nowe                                                     | przyjęte                                                                     |
+| #   | Decyzja                                                       | Co zmienia w Temat.md                            | Status                                                              |
+| --- | ------------------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------- |
+| 1   | Okluzja testu A z D2S Amodal                                  | zastępuje przybliżenie z nakładania się obiektów | przyjęte, sprawdzone na danych; Temat.md i CLAUDE.md zaktualizowane |
+| 2   | Walidacja z 2 obrotów każdej sceny, testy na wagach końcowych | doprecyzowuje „walidację wydzielam z treningu"   | przyjęte                                                            |
+| 3   | Wycinki testu B z niezasłoniętych obiektów walidacji D2S      | doprecyzowuje „obrazy nieużyte w treningu"       | przyjęte                                                            |
+| 4   | Recall przy precyzji 0,90 oraz recall bez progu               | doprecyzowuje metrykę główną                     | przyjęte                                                            |
+| 5   | RF-DETR-S przy 640 px zamiast natywnych 512 px                | doprecyzowuje „ok. 640 px"                       | przyjęte; jeśli 640 niedozwolone, najbliższa dozwolona wartość      |
+| 6   | R2 = R1 + tyle samo scen syntetycznych, równa liczba iteracji | doprecyzowuje reżim R2                           | przyjęte                                                            |
+| 7   | Obrazy zmniejszone do 1024 px przed wysłaniem na Kaggle       | nowe                                             | przyjęte                                                            |
