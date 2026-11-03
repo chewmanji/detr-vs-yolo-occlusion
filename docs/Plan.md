@@ -43,11 +43,11 @@ Decyzje, które doprecyzowują lub zmieniają Temat.md, są zebrane w sekcji 13;
 **Cel:** D2S w formacie YOLO na Kaggle oraz GT testu A z okluzją każdego obiektu.
 
 - [x] Pobrać D2S i D2S Amodal do `data/` ([źródło](https://www.mvtec.com/company/research/datasets/mvtec-d2s/downloads), licencja CC BY-NC-SA 4.0). Obrazy D2S Amodal (z paddingiem) nie są potrzebne, bo adnotacje przelicza się na oryginalne obrazy D2S.
-- [ ] Inspekcja danych:
+- [x] Inspekcja danych:
   - [x] pliki: `D2S_training.json` (4380 obrazów / 6900 obiektów), `D2S_validation.json` (3600 / 15 683), obrazy 1920×1440 px, segmentacje jako RLE;
   - [x] scena, obrót i oświetlenie z id obrazu (sekcja 1, punkt 2);
-  - [ ] id kategorii (1–60?) i ich mapowanie na 0–59;
-  - [ ] czy obiekty obce (clutter) w walidacji mają adnotacje (walidacja ma też gotowe podzbiory `_clutter`, `_occlusion`, `_wo_occlusion`, `_random_background`).
+  - [x] id kategorii: 1–60 bez luk we wszystkich plikach, wszystkie 60 klas występują w treningu i walidacji; indeks klasy YOLO = `id − 1`. Nazwy brać z `D2S_training.json` i sortować po id, bo lista kategorii w plikach nie jest posortowana. D2S Amodal ma te same id, ale 9 klas pod niemieckimi nazwami (np. `rocket` → `rucola`);
+  - [x] obiekty obce (clutter) nie mają adnotacji (sprawdzone wzrokowo na podzbiorze `_clutter`: 18 scen, 540 obrazów). Ich wykrycie liczy się jako fałszywy alarm, więc wpływa na precyzję i punkt pracy, a nie na recall. D2S Amodal liczy zasłonięcie przez nie jako okluzję (np. butelki częściowo zasłonięte klockiem: 19–21%), więc pula wycinków testu B (okluzja 0) sama pomija takie obiekty.
 - [x] Zgodność D2S Amodal z walidacją D2S (sekcja 1, punkt 1).
 - [x] Środowisko przez uv: Python 3.11, `pyproject.toml` + `uv.lock` (`ultralytics` 8.4.201, `rfdetr` 1.11.2, `pycocotools`; lokalnie torch 2.15 w wersji CPU). `uv sync` odtwarza środowisko.
 - [ ] `scripts/prepare_d2s.py`:
