@@ -4,3 +4,6 @@ data/**
 !data/**/*.md
 .venv/
 .env
+runs/
+*.pt
+*.pth
