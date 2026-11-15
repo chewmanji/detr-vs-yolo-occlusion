@@ -27,7 +27,15 @@ Decyzje, które doprecyzowują lub zmieniają Temat.md, są zebrane w sekcji 13;
 7. **YOLO26 z jawnym `nms=False`.** Według dokumentacji Ultralytics `predict()` i `val()` domyślnie używają głowicy one-to-many z NMS. Te same wagi z `nms=True` dają bez dodatkowego treningu czwarty wariant, „YOLO26-S o2m+NMS", czyli porównanie z NMS i bez na jednym modelu.
 8. **R1 i R2 z tą samą liczbą iteracji.** R2 ma ok. 2× więcej obrazów, więc przy tej samej liczbie epok trenowałby dwa razy dłużej. Dla R2 skaluję liczbę epok tak, by łączna liczba obejrzanych obrazów była taka sama. Różnica R2 − R1 wynika wtedy z treści danych, a nie z długości treningu.
 9. **Tło scen syntetycznych = tło treningu.** R2 i test B składam na pustym talerzu obrotowym, z wycinkami w tym samym oświetleniu co tło. Test B mierzy wtedy samą okluzję. Test A dokłada zmianę tła i obiekty obce, czyli warunki realne.
-10. **Przepis treningu zamrożony po pilocie.** Każdy model trenuję domyślnym przepisem swojego pakietu (augmentacje, optymalizator), z wejściem 640 px i liczbą epok z pilota. Po pilocie zamrażam wersje pakietów, podział danych, rozdzielczość, liczbę epok i regułę checkpointu (sekcja 10).
+10. **Przepis treningu zamrożony po pilocie.** Każdy model trenuję domyślnym przepisem swojego pakietu (augmentacje, optymalizator), z wejściem 640 px i stałą liczbą epok (punkt 11). Po pilocie zamrażam wersje pakietów, podział danych, rozdzielczość, liczbę epok i regułę checkpointu (sekcja 10).
+11. **Stała liczba epok: 100 dla każdego modelu (przyjęte 15.11).** To domyślna liczba epok obu pakietów, więc pasuje do punktu 10. Nie wybieram jej według walidacji, bo:
+
+    - walidacja to inne obroty tych samych scen treningowych, więc nasyca się po kilku epokach (w pilocie mAP@50:95 0,93–0,97 po 3 epokach), a jej plateau nic nie mówi o zatłoczonych scenach testu A;
+    - testu nie wolno używać do wyboru;
+    - harmonogram Ultralytics jest liczony od zadanej liczby epok (LR maleje liniowo do 1% na koniec, mozaika wyłączona na ostatnie 10 epok), więc zatrzymanie po plateau ucięłoby go w innym miejscu dla każdego modelu. RF-DETR ma domyślnie stałe LR przez pierwsze 100 epok (spadek 10× dopiero po setnej). Przy 100 epokach `optimizer=auto` Ultralytics wybiera AdamW (5500 iteracji, próg 10 000); powyżej ok. 180 epok przełączyłby się na MuSGD;
+    - jedna reguła dla wszystkich modeli i znany z góry koszt GPU.
+
+    Ryzyko przeuczenia: prawie pełne mAP walidacji oznacza dopasowanie do warunków treningu (pojedyncze obiekty, jednolite tło), a nie rozwiązanie zadania. Dłuższy trening może mocniej specjalizować model do tych warunków, ale walidacja z tego samego rozkładu i tak by tego nie wykryła, więc wczesne zatrzymanie przed tym nie chroni. Ryzyko ograniczają domyślne regularyzacje pakietów (augmentacje, weight decay, EMA, wagi wstępne), a wszystkie modele mają tę samą liczbę epok. Opisuję je w ograniczeniach (sekcja 8).
 
 ## 2. Harmonogram
 
@@ -69,14 +77,16 @@ Decyzje, które doprecyzowują lub zmieniają Temat.md, są zebrane w sekcji 13;
 **Cel:** potok trening → predykcja → ewaluacja działa end-to-end i znam koszt GPU.
 
 - [x] `scripts/train.py`: jeden punkt wejścia `--model {yolo11s,yolo26s,rfdetr-s} --regime {R1,R2} --labels {c60,c1} --seed N`; checkpoint co epokę i wznawianie (`resume`), bo sesja Kaggle trwa najwyżej ok. 12 h. Zrobione 03.11: `--epochs` to epoki R1, a R2 dostaje je przeskalowane stosunkiem liczby obrazów treningowych (sekcja 1, punkt 8); R2 czyta z `<labels>_r2/` obok `c60/` i `c1/`, więc generator musi zapisać tam. Wznowienie = ponowne uruchomienie tej samej komendy (Ultralytics `weights/last.pt`, RF-DETR `last.ckpt`); skończonego runu Ultralytics nie wznawia. Wagi do testów: Ultralytics `weights/last.pt`, RF-DETR `last_ema.pth`. RF-DETR: batch 4 × akumulacja 4 = 16, jak domyślny batch Ultralytics. Sprawdzone lokalnie na CPU na 16 obrazach: wszystkie 3 modele trenują, przerwany run wznawia się. Każda zakończona sesja dopisuje wiersz do `<out>/runs.csv` (wersje, GPU, epoki, godziny, s/epokę, szczytowa pamięć GPU, ostatnie mAP walidacji); z tych wierszy powstaje `results/runs.csv`. Sesja zabita przez limit 12 h wiersza nie zapisze.
-- [ ] `scripts/predict.py`: predykcje do COCO JSON, próg pewności 0,001, najwyżej 100 detekcji na obraz; YOLO26 w dwóch wariantach (`nms=False` i `nms=True`).
-- [ ] `scripts/evaluate.py` w wersji minimalnej: mAP przez pycocotools i recall per przedział okluzji.
-- [ ] Notatnik Kaggle: instalacja `ultralytics` i `rfdetr[train]` (bez dodatku `train` RF-DETR nie trenuje) w wersjach z `uv.lock`, bez nadpisywania torcha z obrazu Kaggle (wersję torcha zapisać w protokole); akcelerator T4 (sprawdzić, czy P100 jest jeszcze wspierany przez aktualny PyTorch), uruchamianie w tle przez „Save & Run All". Sprawdzone 03.11.2026: dataset jest pod `/kaggle/input/datasets/wojtekkosmalski/d2s-yolo/` z folderami `c60/` i `c1/` (liczby obrazów zgodne), 2× T4, torch 2.11.0+cu130 zostaje po `pip install` obu pakietów (lokalnie torch 2.15.0). Notatnik `notebooks/kaggle.ipynb` napisany 04.11 (klon repo, wersje pakietów z `uv.lock`, lista `RUNS` ustawiona na pilota), jeszcze nie uruchomiony.
-- [ ] Pomiar: każdy z 3 modeli, 2–3 epoki na R1/c60 → czas epoki, pamięć GPU, czy mAP walidacji rośnie.
+- [x] `scripts/predict.py`: predykcje do COCO JSON, próg pewności 0,001, najwyżej 100 detekcji na obraz; YOLO26 w dwóch wariantach (`nms=False` i `nms=True`). Zrobione 15.11: `predict.py <folder runu>` zapisuje w folderze runu `pred_test_a.json` z wag końcowych, a dla YOLO26 także `pred_test_a_nms.json` (głowica one-to-many z NMS; plik bez sufiksu to głowica end-to-end). NMS Ultralytics z ustawieniami domyślnymi (IoU 0,7, osobno dla każdej klasy). RF-DETR zwraca zawsze 300 ramek, zostaje 100 o najwyższej pewności. `category_id` = indeks klasy + 1 (w c1 zawsze 1); RF-DETR zwraca te same indeksy klas co etykiety YOLO (sprawdzone).
+- [x] `scripts/evaluate.py` w wersji minimalnej: mAP przez pycocotools i recall per przedział okluzji. Zrobione 15.11: mAP@50:95 i mAP@50 (dla c1 bez podziału na klasy), Recall_any i Recall_cls przy progu 0,001 z dopasowaniem z sekcji 7, w grupach: wszystkie obiekty, przedziały okluzji obiektów nieuciętych, obiekty ucięte; wynik w `results/test_a.csv`. Kontrola: GT podane jako predykcje daje 1,0 we wszystkich metrykach, a liczności przedziałów zgadzają się z tabelą w sekcji 1; asercje sprawdzają dopasowanie na dwóch nakładających się obiektach.
+- [ ] Notatnik Kaggle: instalacja `ultralytics` i `rfdetr[train]` (bez dodatku `train` RF-DETR nie trenuje) w wersjach z `uv.lock`, bez nadpisywania torcha z obrazu Kaggle (wersję torcha zapisać w protokole); akcelerator T4 (sprawdzić, czy P100 jest jeszcze wspierany przez aktualny PyTorch), uruchamianie w tle przez „Save & Run All". Sprawdzone 03.11.2026: dataset jest pod `/kaggle/input/datasets/wojtekkosmalski/d2s-yolo/` z folderami `c60/` i `c1/` (liczby obrazów zgodne), 2× T4, torch 2.11.0+cu130 zostaje po `pip install` obu pakietów (lokalnie torch 2.15.0). Notatnik `notebooks/kaggle.ipynb` napisany 04.11 (klon repo, wersje pakietów z `uv.lock`, lista `RUNS` ustawiona na pilota). Uruchomiony 15.11 (pilot) bez błędów; Kaggle ma Pythona 3.13. Dataset pod `/kaggle/input` czyta się wolno (Ultralytics mierzy ok. 1,7 MB/s), więc pierwszy run w sesji traci ok. 6 min na pierwsze wczytanie obrazów; potem obrazy są w pamięci podręcznej systemu. P100 niesprawdzony. Od 15.11 notatnik po każdym udanym treningu uruchamia `predict.py` na teście A, a lista `RUNS` to pełne runy R1/c60 (RF-DETR w osobnej sesji).
+- [x] Pomiar: każdy z 3 modeli, 2–3 epoki na R1/c60 → czas epoki, pamięć GPU, czy mAP walidacji rośnie. Zrobione 15.11 (jedna T4, 3 epoki): epoka z walidacją trwa ok. 52 s (YOLO11-S), 64 s (YOLO26-S) i 316 s (RF-DETR-S); szczytowa pamięć GPU 4,6 / 5,4 / 5,7 GB z 15 GB; mAP@50:95 walidacji rośnie w każdej epoce i po 3 epokach wynosi 0,97 / 0,93 / 0,97. Uwagi: (1) 3 epoki Ultralytics mieszczą się w ostatnich 10 (`close_mosaic=10`), więc szły bez mozaiki, a epoka z mozaiką może być wolniejsza; (2) walidacja z obrotów jest już prawie nasycona, więc plateau jej mAP słabo nadaje się do wyboru liczby epok (sekcja 1, punkt 11).
 - [x] Rozdzielczość RF-DETR-S: sprawdzić, czy 640 px spełnia wymóg podzielności (natywnie 512 px); jeśli nie, najbliższa dozwolona wartość. Sprawdzone 03.11: wymóg to podzielność przez patch 16 × 2 okna = 32, więc 640 jest dozwolone (kodowanie pozycji 32 → 40, interpolowane z wag wstępnych).
-- [ ] Decyzja o drugim ziarnie (sekcja 9).
+- [x] Decyzja o drugim ziarnie (sekcja 9). Przyjęte 15.11: zostaje (ok. 80–100 h przy progu 120 h).
 
 **Gotowe (M1), gdy:** jeden model przeszedł cały potok, a czasy epok trzech modeli i decyzja o drugim ziarnie są wpisane do sekcji 9.
+
+**M1 osiągnięty 15.11:** wszystkie trzy modele z wagami pilota (3 epoki) przeszły trening na Kaggle, predykcję testu A (lokalnie na CPU: YOLO ok. 10 min na wariant, RF-DETR ok. 38 min) i ewaluację. mAP@50:95 na teście A: YOLO11-S 0,34, YOLO26-S 0,20 bez NMS i 0,34 z NMS, RF-DETR-S 0,44; Recall_any spada z okluzją. Liczby z 3 epok sprawdzają tylko potok. Recall przy progu 0,001 zależy od liczby ramek na obraz (YOLO11-S 21, YOLO26-S 97 bez NMS i 73 z NMS, RF-DETR-S 100), więc modele porównuję dopiero w punkcie pracy z sekcji 7.
 
 ## 5. Etap 3: generator scen i test B (10–24.11)
 
@@ -98,7 +108,7 @@ Decyzje, które doprecyzowują lub zmieniają Temat.md, są zebrane w sekcji 13;
 
 ## 6. Etap 4: treningi (4a: 10–24.11, 4b: 25.11–15.12)
 
-Runy R1 nie potrzebują generatora, więc ruszają zaraz po M1, równolegle z Etapem 3. Pierwsze runy R1/c60 (YOLO11-S i RF-DETR-S) są zarazem pilotem zbieżności: trenuję do plateau mAP walidacji, ustalam liczbę epok (YOLO26-S dostaje liczbę epok YOLO11-S) i wpisuję ją do protokołu przed kolejnymi runami.
+Runy R1 nie potrzebują generatora, więc ruszają zaraz po M1, równolegle z Etapem 3. Każdy run R1 trwa 100 epok (sekcja 1, punkt 11), a run R2 tyle epok, by obejrzeć tyle samo obrazów (punkt 8). Pierwszy pełny run YOLO pokaże czas epoki z mozaiką, którego pilot nie zmierzył; jeśli przekracza ok. 2× czas z pilota, sprawdzam ponownie budżet z sekcji 9.
 
 Nazwa runu: `{model}_{reżim}_{etykiety}_s{ziarno}`, np. `rfdetrs_R2_c60_s1`.
 
@@ -150,7 +160,7 @@ Po każdym runie:
 ## 8. Etap 6: raport i prezentacja (13.01–01.02)
 
 - [ ] Raport po polsku: wstęp (SCO), przegląd literatury, metody (szkic z Etapu 3), wyniki per RQ, dyskusja, ograniczenia, wnioski, związek z pracą magisterską (wybór detektora-lokalizatora w trybie class-agnostic, generator, pomiar okluzji).
-- [ ] Ograniczenia: sceny syntetyczne bez cieni i fizyki układania; jeden zbiór danych; zmiana tła między treningiem a testem A; 1–2 ziarna; różna liczba parametrów; różne domyślne augmentacje pakietów (mozaika Ultralytics sama tworzy obrazy z wieloma obiektami).
+- [ ] Ograniczenia: sceny syntetyczne bez cieni i fizyki układania; jeden zbiór danych; zmiana tła między treningiem a testem A; 1–2 ziarna; różna liczba parametrów; różne domyślne augmentacje pakietów (mozaika Ultralytics sama tworzy obrazy z wieloma obiektami); stała liczba epok bez kontroli przeuczenia do warunków treningu, bo walidacja z obrotów go nie wykrywa (sekcja 1, punkt 11).
 - [ ] Cytowania: D2S (ECCV 2018), D2S Amodal (WACV 2019), RF-DETR, YOLO26, YOLO11.
 - [ ] Slajdy i próba prezentacji.
 - [ ] README z instrukcją odtworzenia: dane → `prepare_d2s.py` → `generate.py` → `train.py` → `predict.py` → `evaluate.py`.
@@ -161,27 +171,29 @@ Po każdym runie:
 
 Kaggle daje ok. 30 h GPU tygodniowo (sprawdzić aktualny limit konta). Okno 10.11–21.12 to 6 tygodni, czyli ok. 180 h. Przy równej liczbie iteracji run R2 kosztuje tyle co R1. Każdy model ma 6 runów (4 z ziarnem 0, 2 z ziarnem 1), a predykcja to ok. 0,3 h na run.
 
-| Model     | s / epokę (R1) | Epoki | h / run | Runy | h łącznie |
-| --------- | -------------- | ----- | ------- | ---- | --------- |
-| YOLO11-S  |                |       |         | 6    |           |
-| YOLO26-S  |                |       |         | 6    |           |
-| RF-DETR-S |                |       |         | 6    |           |
+| Model     | s / epokę (R1) | Epoki      | h / run | Runy | h łącznie |
+| --------- | -------------- | ---------- | ------- | ---- | --------- |
+| YOLO11-S  | 52             | 100        | 1,5     | 6    | 9         |
+| YOLO26-S  | 64             | 100        | 1,9     | 6    | 11        |
+| RF-DETR-S | 316            | 100        | 8,9     | 6    | 53        |
+
+Czas epoki z pilota 15.11 (sekcja 4), liczba epok z sekcji 1, punkt 11. Razem z predykcją (18 × 0,3 h) wychodzi ok. 80 h; gdyby mozaika podwoiła czas epoki YOLO, ok. 100 h. Od 15.11 do 21.12 zostaje ok. 5 tygodni, czyli ok. 150 h, a 80% z tego to 120 h. **Decyzja M1 (15.11): drugie ziarno zostaje.** Zakłada limit 30 h GPU tygodniowo; jeśli limit konta jest niższy albo epoka YOLO z mozaiką trwa ponad 2× dłużej niż w pilocie, liczę budżet od nowa.
 
 Reguła z Temat.md: jeśli 18 runów przekracza 80% dostępnych godzin, rezygnuję z drugiego ziarna. Kolejność runów z sekcji 6 zapewnia, że przy cięciach odpadają najpierw runy o najniższym priorytecie.
 
 ## 10. Protokół (wypełnić po pilocie, potem bez zmian)
 
-| Pole                                        | Wartość            |
-| ------------------------------------------- | ------------------ |
-| Wersje `ultralytics` / `rfdetr` / `torch`   |                    |
-| Obroty walidacyjne                          |                    |
-| Rozdzielczość obrazów w datasecie / wejście | 1024 px / 640 px   |
-| Epoki R1 (YOLO / RF-DETR)                   |                    |
-| Epoki R2 (równa liczba iteracji)            |                    |
-| Batch, akumulacja gradientu                 |                    |
-| Checkpoint do testów                        | końcowy (last/EMA) |
-| GPU Kaggle                                  |                    |
-| Drugie ziarno                               | tak / nie          |
+| Pole                                        | Wartość                                               |
+| ------------------------------------------- | ----------------------------------------------------- |
+| Wersje `ultralytics` / `rfdetr` / `torch`   | 8.4.201 / 1.11.2 / 2.11.0+cu130 (Kaggle, Python 3.13) |
+| Obroty walidacyjne                          | 4 i 9                                                 |
+| Rozdzielczość obrazów w datasecie / wejście | 1024 px / 640 px                                      |
+| Epoki R1 (YOLO / RF-DETR)                   | 100 / 100                                             |
+| Epoki R2 (równa liczba iteracji)            | 100 × obrazy R1 / obrazy R2 (liczy `train.py`)        |
+| Batch, akumulacja gradientu                 | YOLO 16 × 1, RF-DETR 4 × 4                            |
+| Checkpoint do testów                        | końcowy (last/EMA)                                    |
+| GPU Kaggle                                  | Tesla T4 (jedna z dwóch)                              |
+| Drugie ziarno                               | tak                                                   |
 
 ## 11. Struktura repozytorium
 

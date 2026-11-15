@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Status
 
-Data preparation and the training script done; prediction and evaluation not written yet. Python 3.11 with dependencies managed by uv (`pyproject.toml` + `uv.lock`):
+Data preparation, training, prediction and a minimal evaluation on test A done; the test B / R2 scene generator not written yet. Python 3.11 with dependencies managed by uv (`pyproject.toml` + `uv.lock`):
 
 - `uv sync` installs the locked environment into `.venv`
 - `uv run python <script>` runs inside it
@@ -12,7 +12,9 @@ Data preparation and the training script done; prediction and evaluation not wri
 - `uv run ruff check .` lints, `uv run ruff format .` formats and `uv run pyright` type-checks; run all three before committing. Config is in `pyproject.toml`: line length 120, type hints required on every function. Pyright uses the same engine and config as Pylance and checks only `scripts/`; add new code folders to its `include`
 - `uv run python scripts/prepare_d2s.py` builds `data/d2s_yolo/` from `data/d2s` and `data/d2s_amodal` (about 5 min): `c60/` and `c1/` YOLO datasets readable by both packages, plus `test_a_gt.json` with per-object `occlusion` and `truncated`. It refuses to overwrite an existing output; its asserts are the checks.
 - `uv run python scripts/train.py --model {yolo11s,yolo26s,rfdetr-s} --regime {R1,R2} --labels {c60,c1} --seed N --epochs E [--data DIR] [--out runs]` trains one run into `runs/{model}_{regime}_{labels}_s{seed}/`; rerunning the same command resumes from the last epoch checkpoint. Each finished session appends a row (versions, GPU, time, peak GPU memory, last validation mAP) to `runs/runs.csv`. On Windows set `PYTHONUTF8=1`, or RF-DETR crashes printing its validation table.
-- `notebooks/kaggle.ipynb` runs training on Kaggle: it clones the repo from GitHub (push first), installs the `uv.lock` versions of `ultralytics` and `rfdetr`, and runs `train.py` for each entry in its `RUNS` list.
+- `uv run python scripts/predict.py runs/<run>` writes `pred_test_a.json` (COCO results, top 100 boxes per image, score >= 0.001) into the run folder from its final weights; YOLO26 runs also write `pred_test_a_nms.json` (one-to-many head with NMS; the plain file is the end-to-end head).
+- `uv run python scripts/evaluate.py runs/*/pred_test_a*.json` prints and saves to `results/test_a.csv` mAP@50:95, mAP@50 and recall (any class / right class) per occlusion bin; the run folder name gives the label mode. It checks its matching with asserts.
+- `notebooks/kaggle.ipynb` runs training on Kaggle: it clones the repo from GitHub (push first), installs the `uv.lock` versions of `ultralytics` and `rfdetr`, and runs `train.py` and then `predict.py` for each entry in its `RUNS` list.
 - `uv tool run --env-file .env --with six kaggle <command>` runs the Kaggle CLI (it is not a project dependency, and version 2.2.5 is missing its `six` dependency). `.env` is gitignored and holds `KAGGLE_API_TOKEN`.
 
 The GitHub repo is public: never commit data, tokens or literature PDFs.
